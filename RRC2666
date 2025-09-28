@@ -1,0 +1,59 @@
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local char = player.Character or player.CharacterAdded:Wait()
+local hrp = char:WaitForChild("HumanoidRootPart")
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local NetFolder = ReplicatedStorage.Packages._Index["sleitnick_net@0.2.0"].net
+
+-- Remote references
+local CancelFishing = NetFolder:FindFirstChild("RF/CancelFishingInputs")
+local ChargeRod = NetFolder:FindFirstChild("RF/ChargeFishingRod")
+local StartMinigame = NetFolder:FindFirstChild("RF/RequestFishingMinigameStarted")
+local REReplicateTextEffect = NetFolder:FindFirstChild("RE/ReplicateTextEffect")
+local CompleteFishing = NetFolder:FindFirstChild("RE/FishingCompleted")
+
+local needRecast = false
+
+-- Listener tanda seru (!)
+REReplicateTextEffect.OnClientEvent:Connect(function(data)
+	if data.TextData and data.TextData.Text == "!" then
+		local color = tostring(data.TextData.TextColor)
+		if string.find(color, "0 0.333333 0.635294") then
+			CancelFishing:InvokeServer()
+			needRecast = true
+		end
+	end
+end)
+
+-- Loop utama
+task.spawn(function()
+	while true do
+		-- Lempar pancing (charge)
+		local look = hrp.CFrame.LookVector
+		local chargeArgs = {
+			[1] = look.X,
+			[2] = look.Z
+		}
+		ChargeRod:InvokeServer(unpack(chargeArgs))
+		task.wait(1.5)
+
+		if needRecast then
+			CancelFishing:InvokeServer()
+			task.wait(0.5)
+			needRecast = false
+		else
+			-- Mulai mini-game
+			local miniArgs = {
+				[1] = 1,
+				[2] = 1
+			}
+			StartMinigame:InvokeServer(unpack(miniArgs))
+			task.wait(2)
+		end
+
+		-- Selesaikan fishing
+		CompleteFishing:FireServer()
+		task.wait(2)
+	end
+end)
