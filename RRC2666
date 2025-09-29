@@ -1,59 +1,182 @@
-local Players = game:GetService("Players")
-local player = Players.LocalPlayer
-local char = player.Character or player.CharacterAdded:Wait()
-local hrp = char:WaitForChild("HumanoidRootPart")
+-- Bagian Auto Fish V2 (point 1–5 saja diambil dari script aslinya)
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local NetFolder = ReplicatedStorage.Packages._Index["sleitnick_net@0.2.0"].net
+-- Status dan variabel
+local FuncAutoFishV2 = {
+    autofishV2 = false,
+    perfectCastV2 = true,
+    fishingActiveV2 = false,
+    delayInitializedV2 = false,
+    REReplicateTextEffectV2 = REReplicateTextEffect
+}
 
--- Remote references
-local CancelFishing = NetFolder:FindFirstChild("RF/CancelFishingInputs")
-local ChargeRod = NetFolder:FindFirstChild("RF/ChargeFishingRod")
-local StartMinigame = NetFolder:FindFirstChild("RF/RequestFishingMinigameStarted")
-local REReplicateTextEffect = NetFolder:FindFirstChild("RE/ReplicateTextEffect")
-local CompleteFishing = NetFolder:FindFirstChild("RE/FishingCompleted")
+local RodDelaysV2 = {
+    ["Ares Rod"] = { custom = 1.12, bypass = 1.45 },
+    ["Angler Rod"] = { custom = 1.12, bypass = 1.45 },
+    ["Poseidon Rod"] = { custom = 1.12, bypass = 1.45 },
+    ["Hellfire Rod"] = { custom = 1.12, bypass = 1.45 },
+    ["Frost Rod"] = { custom = 1.12, bypass = 1.45 },
+    ["Heartbreaker Rod"] = { custom = 1.12, bypass = 1.45 },
+    ["Pumpkin Rod"] = { custom = 1.12, bypass = 1.45 },
+    ["Magma Rod"] = { custom = 1.12, bypass = 1.45 },
+    ["Bamboo Rod"] = { custom = 1.12, bypass = 1.45 },
+    ["Starter Rod"] = { custom = 4.3, bypass = 4.2 },
+    ["Frigid Rod"] = { custom = 1.12, bypass = 1.45 },
+}
 
-local needRecast = false
+local customDelayV2 = 2
+local BypassDelayV2 = 1
 
--- Listener tanda seru (!)
-REReplicateTextEffect.OnClientEvent:Connect(function(data)
-	if data.TextData and data.TextData.Text == "!" then
-		local color = tostring(data.TextData.TextColor)
-		if string.find(color, "0 0.333333 0.635294") then
-			CancelFishing:InvokeServer()
-			needRecast = true
-		end
-	end
-end)
+-- 1. getValidRodNameV2()
+local function getValidRodNameV2()
+    local player = game.Players.LocalPlayer
+    if not player or not player:FindFirstChild("PlayerGui") then
+        return nil
+    end
 
--- Loop utama
-task.spawn(function()
-	while true do
-		-- Lempar pancing (charge)
-		local look = hrp.CFrame.LookVector
-		local chargeArgs = {
-			[1] = look.X,
-			[2] = look.Z
-		}
-		ChargeRod:InvokeServer(unpack(chargeArgs))
-		task.wait(1.5)
+    local backpackGui = player.PlayerGui:FindFirstChild("Backpack")
+    if not backpackGui then
+        return nil
+    end
 
-		if needRecast then
-			CancelFishing:InvokeServer()
-			task.wait(0.5)
-			needRecast = false
-		else
-			-- Mulai mini-game
-			local miniArgs = {
-				[1] = 1,
-				[2] = 1
-			}
-			StartMinigame:InvokeServer(unpack(miniArgs))
-			task.wait(2)
-		end
+    local display = backpackGui:FindFirstChild("Display")
+    if not display then
+        return nil
+    end
 
-		-- Selesaikan fishing
-		CompleteFishing:FireServer()
-		task.wait(2)
-	end
+    for _, tile in ipairs(display:GetChildren()) do
+        local success, itemNameLabel = pcall(function()
+            return tile.Inner.Tags.ItemName
+        end)
+        if success and itemNameLabel and itemNameLabel:IsA("TextLabel") then
+            local name = itemNameLabel.Text
+            if RodDelaysV2[name] then
+                return name
+            end
+        end
+    end
+
+    return nil
+end
+
+-- 2. updateDelayBasedOnRodV2()
+local function updateDelayBasedOnRodV2(showNotify)
+    if FuncAutoFishV2.delayInitializedV2 then return end
+    local rodName = getValidRodNameV2()
+    if rodName and RodDelaysV2[rodName] then
+        customDelayV2 = RodDelaysV2[rodName].custom
+        BypassDelayV2 = RodDelaysV2[rodName].bypass
+        FuncAutoFishV2.delayInitializedV2 = true
+        if showNotify then
+            Notify({
+                Description = string.format(
+                    "Rod Detected: %s | Delay: %.2f | Bypass Delay: %.2f",
+                    rodName, customDelayV2, BypassDelayV2
+                ),
+                Title = "Auto Fish",
+                Duration = 3
+            })
+        end
+    else
+        customDelayV2 = 10
+        BypassDelayV2 = 1
+        FuncAutoFishV2.delayInitializedV2 = true
+        if showNotify then
+            Notify({
+                Description = "Rod detection failed. Using default delays.",
+                Title = "Auto Fish",
+                Duration = 3
+            })
+        end
+    end
+end
+
+-- 3. setupRodWatcher()
+local function setupRodWatcher()
+    local player = game.Players.LocalPlayer
+    if not player or not player:FindFirstChild("PlayerGui") then return end
+    local backpackGui = player.PlayerGui:FindFirstChild("Backpack")
+    if not backpackGui then return end
+    local display = backpackGui:FindFirstChild("Display")
+    if not display then return end
+
+    display.ChildAdded:Connect(function()
+        task.wait(0.05)
+        if not FuncAutoFishV2.delayInitializedV2 then
+            updateDelayBasedOnRodV2(true)
+        end
+    end)
+end
+
+setupRodWatcher()
+
+-- 4. StartAutoFishV2()
+local function StartAutoFishV2()
+    if FuncAutoFishV2.autofishV2 then return end
+    FuncAutoFishV2.autofishV2 = true
+    updateDelayBasedOnRodV2(true)
+
+    task.spawn(function()
+        while FuncAutoFishV2.autofishV2 do
+            pcall(function()
+                FuncAutoFishV2.fishingActiveV2 = true
+                local equipRemote = NetFolder:FindFirstChild("RE/EquipToolFromHotbar")
+                equipRemote:FireServer(1)
+
+                task.wait(0.1)
+
+                local chargeRemote = NetFolder:FindFirstChild("RF/ChargeFishingRod")
+                chargeRemote:InvokeServer(workspace:GetServerTimeNow())
+
+                task.wait(0.5)
+
+                local RodShakeAnim = Humanoid:LoadAnimation(Animations:FindFirstChild("RodShake"))
+                RodShakeAnim:Play()
+                local rodRemote = NetFolder:FindFirstChild("RF/RodRemote")
+                rodRemote:InvokeServer(workspace:GetServerTimeNow())
+
+                task.wait(0.5)
+
+                local baseX, baseY = -0.75, 1
+                local x, y
+                if FuncAutoFishV2.perfectCastV2 then
+                    x = baseX + (math.random(-500, 500) / 10000000)
+                    y = baseY + (math.random(-500, 500) / 10000000)
+                else
+                    x = math.random(-1000, 1000) / 1000
+                    y = math.random(0, 1000) / 1000
+                end
+
+                local RodIdleAnim = Humanoid:LoadAnimation(Animations:FindFirstChild("RodIdle"))
+                RodIdleAnim:Play()
+                local miniGameRemote = NetFolder:FindFirstChild("RF/RequestFishingMinigameStarted")
+                miniGameRemote:InvokeServer(x, y)
+
+                task.wait(customDelayV2)
+
+                FuncAutoFishV2.fishingActiveV2 = false
+            end)
+        end
+    end)
+end
+
+local function StopAutoFishV2()
+    FuncAutoFishV2.autofishV2 = false
+    FuncAutoFishV2.fishingActiveV2 = false
+    FuncAutoFishV2.delayInitializedV2 = false
+end
+
+-- 5. Listener REReplicateTextEffectV2
+FuncAutoFishV2.REReplicateTextEffectV2.OnClientEvent:Connect(function(data)
+    if FuncAutoFishV2.autofishV2 and FuncAutoFishV2.fishingActiveV2 and data.TextData.EffectType == "Exclaim" then
+        local player = game.Players.LocalPlayer
+        if data.Container == player.Character.Head then
+            task.spawn(function()
+                for i = 1, 3 do
+                    task.wait(BypassDelayV2)
+                    local finishRemote = NetFolder:FindFirstChild("RF/FishingCompleted")
+                    finishRemote:FireServer()
+                end
+            end)
+        end
+    end
 end)
